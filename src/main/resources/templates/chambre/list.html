@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Chambres - Booking Engine')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+
+<main class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Gestion des Chambres</h1>
+        <a th:href="@{/chambres/nouveau}" class="btn btn-success">Nouvelle Chambre</a>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>ID</th>
+                    <th>Numéro</th>
+                    <th>Type</th>
+                    <th>Prix Base</th>
+                    <th>Capacité</th>
+                    <th>Disponible</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr th:each="chambre : ${chambres}">
+                    <td th:text="${chambre.id}"></td>
+                    <td th:text="${chambre.numero}"></td>
+                    <td th:text="${chambre.type}"></td>
+                    <td th:text="${chambre.prixBase} + ' €'"></td>
+                    <td th:text="${chambre.capacite}"></td>
+                    <td>
+                        <span th:if="${chambre.disponible}" class="badge bg-success">Oui</span>
+                        <span th:unless="${chambre.disponible}" class="badge bg-danger">Non</span>
+                    </td>
+                    <td>
+                        <a th:href="@{/chambres/{id}/modifier(id=${chambre.id})}" class="btn btn-sm btn-primary">Modifier</a>
+                        <form th:action="@{/chambres/{id}/supprimer(id=${chambre.id})}" method="post" class="d-inline">
+                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirmer la suppression ?')">Supprimer</button>
+                        </form>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(chambres)}">
+                    <td colspan="7" class="text-center">Aucune chambre enregistrée</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+<th:block th:replace="~{fragments/layout :: scripts}"></th:block>
+</body>
+</html>
