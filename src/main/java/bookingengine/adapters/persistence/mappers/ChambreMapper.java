@@ -23,7 +23,9 @@ public class ChambreMapper {
     public ChambreJpaEntity toEntity(Chambre domain) {
         if (domain == null) return null;
         ChambreJpaEntity entity = new ChambreJpaEntity();
-        entity.setId(domain.getId());
+        if (domain.getId() != null && domain.getId() > 0) {
+            entity.setId(domain.getId());
+        }
         entity.setNumero(domain.getNumero());
         entity.setType(domain.getType());
         entity.setPrixBase(domain.getPrixBase());

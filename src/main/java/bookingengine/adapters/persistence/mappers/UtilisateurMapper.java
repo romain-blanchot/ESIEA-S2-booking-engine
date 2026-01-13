@@ -21,7 +21,9 @@ public class UtilisateurMapper {
     public UtilisateurJpaEntity toEntity(Utilisateur domain) {
         if (domain == null) return null;
         UtilisateurJpaEntity entity = new UtilisateurJpaEntity();
-        entity.setId(domain.getId());
+        if (domain.getId() != null && domain.getId() > 0) {
+            entity.setId(domain.getId());
+        }
         entity.setUsername(domain.getUsername());
         entity.setPassword(domain.getPassword());
         entity.setEmail(domain.getEmail());

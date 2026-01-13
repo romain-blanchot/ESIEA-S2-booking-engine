@@ -21,7 +21,9 @@ public class SaisonMapper {
     public SaisonJpaEntity toEntity(Saison domain) {
         if (domain == null) return null;
         SaisonJpaEntity entity = new SaisonJpaEntity();
-        entity.setId(domain.getId());
+        if (domain.getId() != null && domain.getId() > 0) {
+            entity.setId(domain.getId());
+        }
         entity.setNom(domain.getNom());
         entity.setDateDebut(domain.getDateDebut());
         entity.setDateFin(domain.getDateFin());
