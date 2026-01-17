@@ -1,8 +1,10 @@
 package bookingengine.usecase.chambre;
 
 import bookingengine.domain.entities.Chambre;
+import bookingengine.domain.events.ChambreCreatedEvent;
 import bookingengine.domain.exceptions.EntityNotFoundException;
 import bookingengine.domain.repositories.ChambreRepository;
+import bookingengine.frameworks.kafka.EventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -11,13 +13,18 @@ import java.util.List;
 public class ChambreUseCase {
 
     private final ChambreRepository chambreRepository;
+    private final EventPublisher eventPublisher;
 
-    public ChambreUseCase(ChambreRepository chambreRepository) {
+    public ChambreUseCase(ChambreRepository chambreRepository, EventPublisher eventPublisher) {
         this.chambreRepository = chambreRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     public Chambre creerChambre(Chambre chambre) {
-        return chambreRepository.save(chambre);
+        Chambre saved = chambreRepository.save(chambre);
+        eventPublisher.publish(ChambreCreatedEvent.of(
+                saved.getId(), saved.getNumero(), saved.getType(), saved.getPrixBase()));
+        return saved;
     }
 
     public Chambre modifierChambre(Long id, Chambre chambre) {

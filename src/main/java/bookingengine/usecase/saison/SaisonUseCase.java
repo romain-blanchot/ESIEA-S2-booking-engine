@@ -1,8 +1,10 @@
 package bookingengine.usecase.saison;
 
 import bookingengine.domain.entities.Saison;
+import bookingengine.domain.events.SaisonCreatedEvent;
 import bookingengine.domain.exceptions.EntityNotFoundException;
 import bookingengine.domain.repositories.SaisonRepository;
+import bookingengine.frameworks.kafka.EventPublisher;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -13,13 +15,18 @@ import java.util.Optional;
 public class SaisonUseCase {
 
     private final SaisonRepository saisonRepository;
+    private final EventPublisher eventPublisher;
 
-    public SaisonUseCase(SaisonRepository saisonRepository) {
+    public SaisonUseCase(SaisonRepository saisonRepository, EventPublisher eventPublisher) {
         this.saisonRepository = saisonRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     public Saison creerSaison(Saison saison) {
-        return saisonRepository.save(saison);
+        Saison saved = saisonRepository.save(saison);
+        eventPublisher.publish(SaisonCreatedEvent.of(
+                saved.getId(), saved.getNom(), saved.getDateDebut(), saved.getDateFin(), saved.getCoefficientPrix()));
+        return saved;
     }
 
     public Saison modifierSaison(Long id, Saison saison) {
