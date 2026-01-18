@@ -44,7 +44,7 @@ services:
       context: ./be-back
       dockerfile: Dockerfile
     ports:
-      - '8081:8081'
+      - '8081:8080'
     environment:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/mydatabase
       - SPRING_DATASOURCE_USERNAME=myuser
