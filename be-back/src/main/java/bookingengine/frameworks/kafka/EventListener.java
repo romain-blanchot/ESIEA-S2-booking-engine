@@ -24,4 +24,14 @@ public class EventListener {
     public void handlePrixEvent(String message) {
         log.info("Reçu event prix: {}", message);
     }
+
+    @KafkaListener(topics = KafkaConfig.TOPIC_PAYMENTS, groupId = "booking-engine")
+    public void handlePaymentEvent(String message) {
+        log.info("Reçu event payment: {}", message);
+    }
+
+    @KafkaListener(topics = KafkaConfig.TOPIC_RESERVATIONS, groupId = "booking-engine")
+    public void handleReservationEvent(String message) {
+        log.info("Reçu event reservation: {}", message);
+    }
 }

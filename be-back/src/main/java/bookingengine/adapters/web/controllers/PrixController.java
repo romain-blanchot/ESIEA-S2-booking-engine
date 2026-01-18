@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/api/prix")
+@RequestMapping("prix")
 @Tag(name = "Prix", description = "Calcul des prix")
 public class PrixController {
 
