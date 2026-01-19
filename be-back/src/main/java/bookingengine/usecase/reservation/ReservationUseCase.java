@@ -46,11 +46,19 @@ public class ReservationUseCase {
             throw new IllegalArgumentException("La date de debut doit etre avant la date de fin");
         }
 
-        // Vérifier la disponibilité de la chambre
+        // Vérifier que la chambre existe et est à la vente
+        Chambre chambre = chambreRepository.findById(reservation.getChambreId())
+                .orElseThrow(() -> new EntityNotFoundException("Chambre not found with id: " + reservation.getChambreId()));
+
+        if (!chambre.isDisponible()) {
+            throw new IllegalStateException("Cette chambre n'est pas disponible a la reservation (hors service)");
+        }
+
+        // Vérifier qu'il n'y a pas de conflits de dates avec d'autres réservations
         List<Reservation> conflits = reservationRepository.findConflictingReservations(
                 reservation.getChambreId(), reservation.getDateDebut(), reservation.getDateFin());
         if (!conflits.isEmpty()) {
-            throw new IllegalStateException("La chambre n'est pas disponible pour les dates selectionnees");
+            throw new IllegalStateException("La chambre est deja reservee pour les dates selectionnees");
         }
 
         // Définir les valeurs par défaut
@@ -67,16 +75,12 @@ public class ReservationUseCase {
                 saved.getDateDebut(), saved.getDateFin(), saved.getStatus().name()));
 
         // Créer automatiquement un paiement en attente pour la réservation
-        createPaymentForReservation(saved, paymentMethod);
+        createPaymentForReservation(saved, chambre, paymentMethod);
 
         return saved;
     }
 
-    private void createPaymentForReservation(Reservation reservation, String paymentMethod) {
-        // Récupérer la chambre pour obtenir le prix de base
-        Chambre chambre = chambreRepository.findById(reservation.getChambreId())
-                .orElseThrow(() -> new EntityNotFoundException("Chambre not found with id: " + reservation.getChambreId()));
-
+    private void createPaymentForReservation(Reservation reservation, Chambre chambre, String paymentMethod) {
         // Calculer le nombre de nuits
         long nombreNuits = ChronoUnit.DAYS.between(reservation.getDateDebut(), reservation.getDateFin());
         if (nombreNuits <= 0) {
