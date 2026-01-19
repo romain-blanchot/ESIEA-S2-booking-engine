@@ -42,8 +42,11 @@ public class UseCaseConfig {
     }
 
     @Bean
-    public ReservationUseCase reservationUseCase(ReservationRepository reservationRepository, EventPublisherPort eventPublisher) {
-        return new ReservationUseCase(reservationRepository, eventPublisher);
+    public ReservationUseCase reservationUseCase(ReservationRepository reservationRepository,
+                                                  ChambreRepository chambreRepository,
+                                                  PaymentRepository paymentRepository,
+                                                  EventPublisherPort eventPublisher) {
+        return new ReservationUseCase(reservationRepository, chambreRepository, paymentRepository, eventPublisher);
     }
 
     @Bean

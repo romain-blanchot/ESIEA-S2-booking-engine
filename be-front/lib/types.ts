@@ -40,7 +40,7 @@ export interface Payment {
   paymentDate: string;
 }
 
-export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
+export type PaymentStatus = 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'REFUNDED';
 
 export interface Utilisateur {
   id: number;
@@ -113,6 +113,7 @@ export interface ReservationCreateRequest {
   utilisateurId: number;
   dateDebut: string;
   dateFin: string;
+  paymentMethod?: string;
 }
 
 export interface PaymentCreateRequest {

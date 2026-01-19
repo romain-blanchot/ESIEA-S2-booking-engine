@@ -1,31 +1,56 @@
 package bookingengine.usecase.reservation;
 
+import bookingengine.domain.entities.Chambre;
+import bookingengine.domain.entities.Payment;
+import bookingengine.domain.entities.PaymentStatus;
 import bookingengine.domain.entities.Reservation;
 import bookingengine.domain.entities.ReservationStatus;
 import bookingengine.domain.events.ReservationCreatedEvent;
 import bookingengine.domain.events.ReservationCancelledEvent;
 import bookingengine.domain.exceptions.EntityNotFoundException;
 import bookingengine.domain.ports.EventPublisherPort;
+import bookingengine.domain.repositories.ChambreRepository;
+import bookingengine.domain.repositories.PaymentRepository;
 import bookingengine.domain.repositories.ReservationRepository;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 public class ReservationUseCase {
 
     private final ReservationRepository reservationRepository;
+    private final ChambreRepository chambreRepository;
+    private final PaymentRepository paymentRepository;
     private final EventPublisherPort eventPublisher;
 
-    public ReservationUseCase(ReservationRepository reservationRepository, EventPublisherPort eventPublisher) {
+    public ReservationUseCase(ReservationRepository reservationRepository,
+                              ChambreRepository chambreRepository,
+                              PaymentRepository paymentRepository,
+                              EventPublisherPort eventPublisher) {
         this.reservationRepository = reservationRepository;
+        this.chambreRepository = chambreRepository;
+        this.paymentRepository = paymentRepository;
         this.eventPublisher = eventPublisher;
     }
 
     public Reservation creerReservation(Reservation reservation) {
+        return creerReservation(reservation, "NON_DEFINI");
+    }
+
+    public Reservation creerReservation(Reservation reservation, String paymentMethod) {
         // Validation des dates
         if (reservation.getDateDebut().isAfter(reservation.getDateFin())) {
-            throw new IllegalArgumentException("Start date must be before or equal to end date");
+            throw new IllegalArgumentException("La date de debut doit etre avant la date de fin");
+        }
+
+        // Vérifier la disponibilité de la chambre
+        List<Reservation> conflits = reservationRepository.findConflictingReservations(
+                reservation.getChambreId(), reservation.getDateDebut(), reservation.getDateFin());
+        if (!conflits.isEmpty()) {
+            throw new IllegalStateException("La chambre n'est pas disponible pour les dates selectionnees");
         }
 
         // Définir les valeurs par défaut
@@ -38,9 +63,39 @@ public class ReservationUseCase {
 
         Reservation saved = reservationRepository.save(reservation);
         eventPublisher.publish(ReservationCreatedEvent.of(
-                saved.getId(), saved.getChambreId(), saved.getUtilisateurId(), 
+                saved.getId(), saved.getChambreId(), saved.getUtilisateurId(),
                 saved.getDateDebut(), saved.getDateFin(), saved.getStatus().name()));
+
+        // Créer automatiquement un paiement en attente pour la réservation
+        createPaymentForReservation(saved, paymentMethod);
+
         return saved;
+    }
+
+    private void createPaymentForReservation(Reservation reservation, String paymentMethod) {
+        // Récupérer la chambre pour obtenir le prix de base
+        Chambre chambre = chambreRepository.findById(reservation.getChambreId())
+                .orElseThrow(() -> new EntityNotFoundException("Chambre not found with id: " + reservation.getChambreId()));
+
+        // Calculer le nombre de nuits
+        long nombreNuits = ChronoUnit.DAYS.between(reservation.getDateDebut(), reservation.getDateFin());
+        if (nombreNuits <= 0) {
+            nombreNuits = 1; // Minimum une nuit
+        }
+
+        // Calculer le montant total (prix de base * nombre de nuits)
+        BigDecimal montantTotal = BigDecimal.valueOf(chambre.getPrixBase())
+                .multiply(BigDecimal.valueOf(nombreNuits));
+
+        // Créer le paiement
+        Payment payment = new Payment();
+        payment.setReservationId(reservation.getId());
+        payment.setAmount(montantTotal);
+        payment.setPaymentMethod(paymentMethod != null ? paymentMethod : "NON_DEFINI");
+        payment.setStatus(PaymentStatus.PENDING);
+        payment.setPaymentDate(LocalDateTime.now());
+
+        paymentRepository.save(payment);
     }
 
     public Reservation obtenirReservationParId(Long id) {
@@ -70,7 +125,23 @@ public class ReservationUseCase {
 
         // Validation des dates
         if (reservation.getDateDebut().isAfter(reservation.getDateFin())) {
-            throw new IllegalArgumentException("Start date must be before or equal to end date");
+            throw new IllegalArgumentException("La date de debut doit etre avant la date de fin");
+        }
+
+        // Vérifier la disponibilité si les dates ou la chambre changent
+        boolean datesChanged = !reservation.getDateDebut().equals(existing.getDateDebut())
+                || !reservation.getDateFin().equals(existing.getDateFin());
+        boolean chambreChanged = !reservation.getChambreId().equals(existing.getChambreId());
+
+        if (datesChanged || chambreChanged) {
+            List<Reservation> conflits = reservationRepository.findConflictingReservations(
+                    reservation.getChambreId(), reservation.getDateDebut(), reservation.getDateFin())
+                    .stream()
+                    .filter(r -> !r.getId().equals(id)) // Exclure la réservation actuelle
+                    .toList();
+            if (!conflits.isEmpty()) {
+                throw new IllegalStateException("La chambre n'est pas disponible pour les dates selectionnees");
+            }
         }
 
         reservation.setId(id);

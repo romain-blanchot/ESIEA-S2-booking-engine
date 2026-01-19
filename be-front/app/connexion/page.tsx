@@ -10,6 +10,7 @@ interface PendingReservation {
   chambreId: number;
   dateDebut: string;
   dateFin: string;
+  paymentMethod?: string;
   prixTotal?: number;
   numeroChambre?: string;
   typeChambre?: string;
@@ -33,25 +34,30 @@ export default function ConnexionPage() {
   const { login, isAuthenticated, user, logout } = useAuth();
   const [form, setForm] = useState({ username: '', password: '' });
   const [pendingReservation] = useState<PendingReservation | null>(getStoredPendingReservation);
+  const [reservationError, setReservationError] = useState<string | null>(null);
+  const [reservationLoading, setReservationLoading] = useState(false);
 
   const { mutate: doLogin, loading, error } = useMutation(authApi.connexion);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setReservationError(null);
     const result = await doLogin(form);
     if (result) {
-      login({
+      // Store user data first
+      const userData = {
         id: result.id,
         username: result.username,
         email: result.email,
         role: result.role,
         prenom: result.prenom,
         nom: result.nom,
-      });
+      };
 
-      // Check for pending reservation
+      // Check for pending reservation BEFORE calling login()
       const pendingReservationStr = localStorage.getItem('pendingReservation');
       if (pendingReservationStr) {
+        setReservationLoading(true);
         try {
           const pendingReservation = JSON.parse(pendingReservationStr);
           // Create the reservation
@@ -60,19 +66,31 @@ export default function ConnexionPage() {
             utilisateurId: result.id,
             dateDebut: pendingReservation.dateDebut,
             dateFin: pendingReservation.dateFin,
+            paymentMethod: pendingReservation.paymentMethod,
           });
           // Clear the pending reservation
           localStorage.removeItem('pendingReservation');
-          // Redirect to account page with success message
+          // Now login and redirect
+          login(userData);
           router.push('/mon-compte?reservation=success');
           return;
         } catch (err) {
-          console.error('Failed to create pending reservation:', err);
-          localStorage.removeItem('pendingReservation');
+          setReservationLoading(false);
+          const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+          if (errorMessage.includes('409') || errorMessage.toLowerCase().includes('disponible')) {
+            setReservationError('Cette chambre n\'est plus disponible pour les dates selectionnees. Veuillez choisir d\'autres dates.');
+          } else {
+            setReservationError('Erreur lors de la creation de la reservation: ' + errorMessage);
+          }
+          // Don't clear pending reservation - let user retry or go back to change dates
+          // But still login the user
+          login(userData);
+          return;
         }
       }
 
-      // Redirect based on role
+      // No pending reservation - just login and redirect
+      login(userData);
       if (result.role === 'ADMIN') {
         router.push('/admin');
       } else {
@@ -194,12 +212,22 @@ export default function ConnexionPage() {
               </div>
             )}
 
+            {reservationError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm">
+                <p className="font-medium mb-1">Erreur de reservation</p>
+                <p>{reservationError}</p>
+                <Link href="/" className="inline-block mt-2 text-red-800 underline text-xs">
+                  Retourner a l accueil pour choisir d autres dates
+                </Link>
+              </div>
+            )}
+
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || reservationLoading}
               className="w-full px-4 py-3 bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 transition-colors"
             >
-              {loading ? 'Connexion...' : 'Se connecter'}
+              {reservationLoading ? 'Creation de la reservation...' : loading ? 'Connexion...' : 'Se connecter'}
             </button>
           </form>
 

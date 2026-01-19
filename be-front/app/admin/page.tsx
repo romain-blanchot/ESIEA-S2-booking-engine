@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { chambreApi, saisonApi, reservationApi, paymentApi } from '@/lib/api';
@@ -111,19 +111,38 @@ function AdminHeader() {
 }
 
 // Dashboard Tab
-function DashboardTab() {
-  const { data: chambres } = useApi(useCallback(() => chambreApi.getAll(), []));
-  const { data: reservations } = useApi(useCallback(() => reservationApi.getAll(), []));
-  const { data: paiements } = useApi(useCallback(() => paymentApi.getAll(), []));
-  const { data: saisons } = useApi(useCallback(() => saisonApi.getAll(), []));
+function DashboardTab({ refreshKey }: { refreshKey: number }) {
+  const { data: chambres, refetch: refetchChambres } = useApi(useCallback(() => chambreApi.getAll(), []));
+  const { data: reservations, refetch: refetchReservations } = useApi(useCallback(() => reservationApi.getAll(), []));
+  const { data: paiements, refetch: refetchPaiements } = useApi(useCallback(() => paymentApi.getAll(), []));
+  const { data: saisons, refetch: refetchSaisons } = useApi(useCallback(() => saisonApi.getAll(), []));
+
+  // Refetch all data when refreshKey changes
+  useEffect(() => {
+    if (refreshKey > 0) {
+      refetchChambres();
+      refetchReservations();
+      refetchPaiements();
+      refetchSaisons();
+    }
+  }, [refreshKey, refetchChambres, refetchReservations, refetchPaiements, refetchSaisons]);
 
   const stats = {
     totalChambres: chambres?.length || 0,
     chambresDisponibles: chambres?.filter(c => c.disponible).length || 0,
     reservationsActives: reservations?.filter(r => r.status === 'CONFIRMED' || r.status === 'PENDING').length || 0,
     paiementsEnAttente: paiements?.filter(p => p.status === 'PENDING').length || 0,
-    totalRevenu: paiements?.filter(p => p.status === 'COMPLETED').reduce((sum, p) => sum + p.amount, 0) || 0,
+    totalRevenu: paiements?.filter(p => p.status === 'CONFIRMED').reduce((sum, p) => sum + p.amount, 0) || 0,
     saisonsActives: saisons?.length || 0,
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'CONFIRMED': return 'Confirmee';
+      case 'PENDING': return 'Paiement en attente';
+      case 'CANCELLED': return 'Annulee';
+      default: return status;
+    }
   };
 
   return (
@@ -172,7 +191,7 @@ function DashboardTab() {
                   r.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                   'bg-red-100 text-red-800'
                 }`}>
-                  {r.status}
+                  {getStatusLabel(r.status)}
                 </span>
               </div>
               <p className="text-sm text-gray-600">Chambre {r.chambreId}</p>
@@ -212,7 +231,7 @@ function DashboardTab() {
                       r.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-red-100 text-red-800'
                     }`}>
-                      {r.status}
+                      {getStatusLabel(r.status)}
                     </span>
                   </td>
                 </tr>
@@ -687,6 +706,7 @@ function ReservationsTab() {
   );
   const { data: chambres } = useApi(useCallback(() => chambreApi.getAll(), []));
   const [showForm, setShowForm] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [form, setForm] = useState({
     chambreId: '',
     utilisateurId: '',
@@ -701,19 +721,32 @@ function ReservationsTab() {
 
   const resetForm = () => {
     setForm({ chambreId: '', utilisateurId: '', dateDebut: '', dateFin: '' });
+    setFormError(null);
     setShowForm(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createReservation({
-      chambreId: Number(form.chambreId),
-      utilisateurId: Number(form.utilisateurId),
-      dateDebut: form.dateDebut,
-      dateFin: form.dateFin,
-    });
-    resetForm();
-    refetch();
+    setFormError(null);
+    try {
+      await createReservation({
+        chambreId: Number(form.chambreId),
+        utilisateurId: Number(form.utilisateurId),
+        dateDebut: form.dateDebut,
+        dateFin: form.dateFin,
+      });
+      resetForm();
+      refetch();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Erreur inconnue';
+      if (errorMessage.includes('409') || errorMessage.toLowerCase().includes('disponible')) {
+        setFormError('Cette chambre n\'est pas disponible pour les dates selectionnees. Veuillez choisir d\'autres dates ou une autre chambre.');
+      } else if (errorMessage.includes('400')) {
+        setFormError('Donnees invalides. Verifiez que la date de depart est apres la date d\'arrivee.');
+      } else {
+        setFormError('Erreur lors de la creation de la reservation: ' + errorMessage);
+      }
+    }
   };
 
   const handleCancel = async (id: number) => {
@@ -733,6 +766,15 @@ function ReservationsTab() {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'CONFIRMED': return 'Confirmee';
+      case 'PENDING': return 'Paiement en attente';
+      case 'CANCELLED': return 'Annulee';
+      default: return status;
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -747,12 +789,17 @@ function ReservationsTab() {
 
       {showForm && (
         <form onSubmit={handleSubmit} className="bg-white p-6 border border-gray-200 space-y-4">
+          {formError && (
+            <div className="p-4 bg-red-50 border border-red-200 text-red-700 text-sm">
+              {formError}
+            </div>
+          )}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Chambre</label>
               <select
                 value={form.chambreId}
-                onChange={(e) => setForm({ ...form, chambreId: e.target.value })}
+                onChange={(e) => { setForm({ ...form, chambreId: e.target.value }); setFormError(null); }}
                 className="w-full px-3 py-2 border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none bg-white"
                 required
               >
@@ -779,7 +826,7 @@ function ReservationsTab() {
               <input
                 type="date"
                 value={form.dateDebut}
-                onChange={(e) => setForm({ ...form, dateDebut: e.target.value })}
+                onChange={(e) => { setForm({ ...form, dateDebut: e.target.value }); setFormError(null); }}
                 className="w-full px-3 py-2 border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none"
                 required
               />
@@ -789,7 +836,7 @@ function ReservationsTab() {
               <input
                 type="date"
                 value={form.dateFin}
-                onChange={(e) => setForm({ ...form, dateFin: e.target.value })}
+                onChange={(e) => { setForm({ ...form, dateFin: e.target.value }); setFormError(null); }}
                 className="w-full px-3 py-2 border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none"
                 required
               />
@@ -800,7 +847,7 @@ function ReservationsTab() {
             disabled={creating}
             className="px-4 py-2 bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 transition-colors"
           >
-            Creer
+            {creating ? 'Creation...' : 'Creer'}
           </button>
         </form>
       )}
@@ -840,7 +887,7 @@ function ReservationsTab() {
                 </td>
                 <td className="px-4 py-3">
                   <span className={`inline-block px-2 py-1 text-xs font-medium ${getStatusColor(r.status)}`}>
-                    {r.status}
+                    {getStatusLabel(r.status)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-right">
@@ -867,111 +914,118 @@ function ReservationsTab() {
   );
 }
 
-// Paiements Tab
+// Paiements Tab - Gestion des statuts de paiement
 function PaiementsTab() {
   const { data: paiements, loading, error, refetch } = useApi(
     useCallback(() => paymentApi.getAll(), [])
   );
   const { data: reservations } = useApi(useCallback(() => reservationApi.getAll(), []));
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    reservationId: '',
-    amount: '',
-    paymentMethod: 'CARTE',
-  });
+  const { data: chambres } = useApi(useCallback(() => chambreApi.getAll(), []));
+  const [editingPayment, setEditingPayment] = useState<number | null>(null);
+  const [newStatus, setNewStatus] = useState('');
 
-  const { mutate: createPayment, loading: creating } = useMutation(paymentApi.create);
+  const { mutate: updatePayment, loading: updating } = useMutation(
+    ({ id, data }: { id: number; data: { paymentMethod: string; status: string } }) =>
+      paymentApi.update(id, data)
+  );
 
-  const resetForm = () => {
-    setForm({ reservationId: '', amount: '', paymentMethod: 'CARTE' });
-    setShowForm(false);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await createPayment({
-      reservationId: Number(form.reservationId),
-      amount: Number(form.amount),
-      paymentMethod: form.paymentMethod,
+  const handleStatusChange = async (paymentId: number, currentMethod: string) => {
+    if (!newStatus) return;
+    await updatePayment({
+      id: paymentId,
+      data: { paymentMethod: currentMethod, status: newStatus }
     });
-    resetForm();
+    setEditingPayment(null);
+    setNewStatus('');
     refetch();
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'COMPLETED': return 'bg-green-100 text-green-800';
+      case 'CONFIRMED': return 'bg-green-100 text-green-800';
       case 'PENDING': return 'bg-yellow-100 text-yellow-800';
-      case 'FAILED': return 'bg-red-100 text-red-800';
+      case 'CANCELLED': return 'bg-gray-100 text-gray-800';
+      case 'REFUNDED': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'PENDING': return 'En attente';
+      case 'CONFIRMED': return 'Confirme';
+      case 'CANCELLED': return 'Annule';
+      case 'REFUNDED': return 'Rembourse';
+      default: return status;
+    }
+  };
+
+  const getMethodLabel = (method: string) => {
+    switch (method) {
+      case 'CARTE': return 'Carte bancaire';
+      case 'ESPECES': return 'Especes';
+      case 'VIREMENT': return 'Virement';
+      default: return method;
+    }
+  };
+
+  const getReservationInfo = (reservationId: number) => {
+    const reservation = reservations?.find(r => r.id === reservationId);
+    if (!reservation) return null;
+    const chambre = chambres?.find(c => c.id === reservation.chambreId);
+    return { reservation, chambre };
+  };
+
+  // Stats
+  const stats = {
+    total: paiements?.length || 0,
+    pending: paiements?.filter(p => p.status === 'PENDING').length || 0,
+    confirmed: paiements?.filter(p => p.status === 'CONFIRMED').length || 0,
+    cancelled: paiements?.filter(p => p.status === 'CANCELLED').length || 0,
+    refunded: paiements?.filter(p => p.status === 'REFUNDED').length || 0,
+    totalAmount: paiements?.filter(p => p.status === 'CONFIRMED')
+      .reduce((sum, p) => sum + p.amount, 0) || 0,
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-light text-gray-900">Paiements</h2>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="px-4 py-2 bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-colors"
-        >
-          {showForm ? 'Annuler' : 'Nouveau paiement'}
-        </button>
+      <div>
+        <h2 className="text-2xl font-light text-gray-900 mb-4">Gestion des paiements</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          Gerez les statuts des paiements associes aux reservations. Les paiements sont crees automatiquement lors d une reservation.
+        </p>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} className="bg-white p-6 border border-gray-200 space-y-4">
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Reservation</label>
-              <select
-                value={form.reservationId}
-                onChange={(e) => setForm({ ...form, reservationId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none bg-white"
-                required
-              >
-                <option value="">Selectionnez</option>
-                {reservations?.filter(r => r.status !== 'CANCELLED').map((r) => (
-                  <option key={r.id} value={r.id}>
-                    #{r.id} - Chambre {r.chambreId}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Montant (EUR)</label>
-              <input
-                type="number"
-                value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Methode</label>
-              <select
-                value={form.paymentMethod}
-                onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none bg-white"
-              >
-                <option value="CARTE">Carte bancaire</option>
-                <option value="ESPECES">Especes</option>
-                <option value="VIREMENT">Virement</option>
-              </select>
-            </div>
-          </div>
-          <button
-            type="submit"
-            disabled={creating}
-            className="px-4 py-2 bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 disabled:bg-gray-400 transition-colors"
-          >
-            Creer
-          </button>
-        </form>
-      )}
+      {/* Stats cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="bg-white p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">Total</p>
+          <p className="text-2xl font-light text-gray-900">{stats.total}</p>
+        </div>
+        <div className="bg-white p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">En attente</p>
+          <p className="text-2xl font-light text-yellow-600">{stats.pending}</p>
+        </div>
+        <div className="bg-white p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">Confirmes</p>
+          <p className="text-2xl font-light text-green-600">{stats.confirmed}</p>
+        </div>
+        <div className="bg-white p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">Annules</p>
+          <p className="text-2xl font-light text-gray-600">{stats.cancelled}</p>
+        </div>
+        <div className="bg-white p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">Rembourses</p>
+          <p className="text-2xl font-light text-purple-600">{stats.refunded}</p>
+        </div>
+        <div className="bg-white p-4 border border-gray-200">
+          <p className="text-xs text-gray-500 mb-1">Revenu</p>
+          <p className="text-2xl font-light text-gray-900">{stats.totalAmount.toFixed(0)} EUR</p>
+        </div>
+      </div>
 
-      <div className="bg-white border border-gray-200">
+      {/* Payments table */}
+      <div className="bg-white border border-gray-200 overflow-x-auto">
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
@@ -981,38 +1035,97 @@ function PaiementsTab() {
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Methode</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">Chargement...</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Chargement...</td>
               </tr>
             )}
             {error && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-red-500">Erreur: {error}</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-red-500">Erreur: {error}</td>
               </tr>
             )}
-            {paiements?.map((p) => (
-              <tr key={p.id}>
-                <td className="px-4 py-3 text-sm font-medium text-gray-900">#{p.id}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">#{p.reservationId}</td>
-                <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.amount} EUR</td>
-                <td className="px-4 py-3 text-sm text-gray-600">{p.paymentMethod}</td>
-                <td className="px-4 py-3 text-sm text-gray-600">
-                  {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('fr-FR') : '-'}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-1 text-xs font-medium ${getStatusColor(p.status)}`}>
-                    {p.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
+            {paiements?.map((p) => {
+              const info = getReservationInfo(p.reservationId);
+              return (
+                <tr key={p.id}>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">#{p.id}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    <div>
+                      <span className="font-medium">Res. #{p.reservationId}</span>
+                      {info && (
+                        <span className="text-xs text-gray-400 ml-2">
+                          Chambre {info.chambre?.numero || info.reservation.chambreId}
+                        </span>
+                      )}
+                    </div>
+                    {info && (
+                      <div className="text-xs text-gray-400">
+                        {new Date(info.reservation.dateDebut).toLocaleDateString('fr-FR')} - {new Date(info.reservation.dateFin).toLocaleDateString('fr-FR')}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">{p.amount.toFixed(2)} EUR</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">{getMethodLabel(p.paymentMethod)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-600">
+                    {p.paymentDate ? new Date(p.paymentDate).toLocaleDateString('fr-FR') : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    {editingPayment === p.id ? (
+                      <select
+                        value={newStatus}
+                        onChange={(e) => setNewStatus(e.target.value)}
+                        className="px-2 py-1 text-xs border border-gray-200 focus:border-gray-900 focus:ring-0 outline-none bg-white"
+                        autoFocus
+                      >
+                        <option value="">Choisir...</option>
+                        <option value="PENDING">En attente</option>
+                        <option value="CONFIRMED">Confirme</option>
+                        <option value="CANCELLED">Annule</option>
+                        <option value="REFUNDED">Rembourse</option>
+                      </select>
+                    ) : (
+                      <span className={`inline-block px-2 py-1 text-xs font-medium ${getStatusColor(p.status)}`}>
+                        {getStatusLabel(p.status)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {editingPayment === p.id ? (
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => handleStatusChange(p.id, p.paymentMethod)}
+                          disabled={!newStatus || updating}
+                          className="text-sm text-green-600 hover:text-green-900 disabled:text-gray-400"
+                        >
+                          Valider
+                        </button>
+                        <button
+                          onClick={() => { setEditingPayment(null); setNewStatus(''); }}
+                          className="text-sm text-gray-600 hover:text-gray-900"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => { setEditingPayment(p.id); setNewStatus(p.status); }}
+                        className="text-sm text-gray-600 hover:text-gray-900"
+                      >
+                        Modifier statut
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {paiements?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">Aucun paiement</td>
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Aucun paiement</td>
               </tr>
             )}
           </tbody>
@@ -1025,6 +1138,7 @@ function PaiementsTab() {
 // Main Admin Page
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
+  const [dashboardRefreshKey, setDashboardRefreshKey] = useState(0);
   const { isAuthenticated, user } = useAuth();
 
   // Check authentication
@@ -1045,6 +1159,14 @@ export default function AdminPage() {
     { id: 'paiements', label: 'Paiements' },
   ];
 
+  const handleTabChange = (tabId: TabId) => {
+    setActiveTab(tabId);
+    // Refresh dashboard data when switching to it
+    if (tabId === 'dashboard') {
+      setDashboardRefreshKey(prev => prev + 1);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AdminHeader />
@@ -1056,7 +1178,7 @@ export default function AdminPage() {
             {tabs.map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => handleTabChange(tab.id)}
                 className={`pb-3 sm:pb-4 text-sm font-medium transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'text-gray-900 border-b-2 border-gray-900'
@@ -1070,7 +1192,7 @@ export default function AdminPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'dashboard' && <DashboardTab />}
+        {activeTab === 'dashboard' && <DashboardTab refreshKey={dashboardRefreshKey} />}
         {activeTab === 'chambres' && <ChambresTab />}
         {activeTab === 'saisons' && <SaisonsTab />}
         {activeTab === 'reservations' && <ReservationsTab />}

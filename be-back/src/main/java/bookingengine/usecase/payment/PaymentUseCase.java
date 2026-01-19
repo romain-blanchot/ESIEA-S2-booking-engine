@@ -2,6 +2,8 @@ package bookingengine.usecase.payment;
 
 import bookingengine.domain.entities.Payment;
 import bookingengine.domain.entities.PaymentStatus;
+import bookingengine.domain.entities.Reservation;
+import bookingengine.domain.entities.ReservationStatus;
 import bookingengine.domain.events.PaymentCreatedEvent;
 import bookingengine.domain.events.PaymentStatusChangedEvent;
 import bookingengine.domain.exceptions.EntityNotFoundException;
@@ -61,21 +63,55 @@ public class PaymentUseCase {
             .orElseThrow(() -> new EntityNotFoundException("Payment not found with id: " + id));
 
         PaymentStatus oldStatus = existing.getStatus();
-        
+        Long reservationId = existing.getReservationId();
+
         payment.setId(id);
+        payment.setReservationId(reservationId);
         if (payment.getPaymentDate() == null) {
             payment.setPaymentDate(existing.getPaymentDate());
         }
+        if (payment.getAmount() == null) {
+            payment.setAmount(existing.getAmount());
+        }
 
         Payment updated = paymentRepository.save(payment);
-        
+
         // Publier un événement si le statut a changé
         if (!oldStatus.equals(updated.getStatus())) {
             eventPublisher.publish(PaymentStatusChangedEvent.of(
                     updated.getId(), oldStatus.name(), updated.getStatus().name()));
+
+            // Si le paiement passe à CONFIRMED, confirmer aussi la réservation
+            if (updated.getStatus() == PaymentStatus.CONFIRMED) {
+                confirmReservation(reservationId);
+            }
+
+            // Si le paiement est annulé ou remboursé, annuler la réservation
+            if (updated.getStatus() == PaymentStatus.CANCELLED || updated.getStatus() == PaymentStatus.REFUNDED) {
+                cancelReservation(reservationId);
+            }
         }
-        
+
         return updated;
+    }
+
+    private void confirmReservation(Long reservationId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+            .orElse(null);
+        if (reservation != null && reservation.getStatus() == ReservationStatus.PENDING) {
+            reservation.setStatus(ReservationStatus.CONFIRMED);
+            reservationRepository.save(reservation);
+        }
+    }
+
+    private void cancelReservation(Long reservationId) {
+        Reservation reservation = reservationRepository.findById(reservationId)
+            .orElse(null);
+        if (reservation != null && reservation.getStatus() != ReservationStatus.CANCELLED) {
+            reservation.setStatus(ReservationStatus.CANCELLED);
+            reservation.setCancelledAt(LocalDateTime.now());
+            reservationRepository.save(reservation);
+        }
     }
 
     public void supprimerPayment(Long id) {

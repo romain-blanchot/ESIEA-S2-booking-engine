@@ -103,7 +103,8 @@ public class ReservationController {
         reservation.setStatus(ReservationStatus.PENDING);
         reservation.setCreatedAt(LocalDateTime.now());
 
-        Reservation created = reservationUseCase.creerReservation(reservation);
+        String paymentMethod = request.paymentMethod() != null ? request.paymentMethod() : "NON_DEFINI";
+        Reservation created = reservationUseCase.creerReservation(reservation, paymentMethod);
         return ResponseEntity.status(HttpStatus.CREATED).body(ReservationResponse.from(created));
     }
 

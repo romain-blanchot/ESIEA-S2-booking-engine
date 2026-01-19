@@ -79,9 +79,9 @@ public class PaymentJpaEntity {
     }
 
     public enum PaymentStatusJpa {
-        PENDING,
-        CONFIRMED,
-        CANCELLED,
-        REFUNDED
+        PENDING,      // En attente de paiement
+        CONFIRMED,    // Paiement confirme
+        CANCELLED,    // Paiement annule
+        REFUNDED      // Paiement rembourse
     }
 }

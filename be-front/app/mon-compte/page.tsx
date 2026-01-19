@@ -209,14 +209,14 @@ function ReservationCard({
               <div className="text-right">
                 <p className="text-lg font-medium text-gray-900">{payment.amount} EUR</p>
                 <span className={`inline-block px-2 py-0.5 text-xs font-medium ${
-                  payment.status === 'COMPLETED' || payment.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                  payment.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
                   payment.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                   payment.status === 'REFUNDED' ? 'bg-blue-100 text-blue-800' :
-                  'bg-red-100 text-red-800'
+                  'bg-gray-100 text-gray-800'
                 }`}>
-                  {payment.status === 'COMPLETED' || payment.status === 'CONFIRMED' ? 'Paye' :
+                  {payment.status === 'CONFIRMED' ? 'Paye' :
                    payment.status === 'PENDING' ? 'En attente' :
-                   payment.status === 'REFUNDED' ? 'Rembourse' : 'Echoue'}
+                   payment.status === 'REFUNDED' ? 'Rembourse' : 'Annule'}
                 </span>
               </div>
             </div>

@@ -1,8 +1,8 @@
 package bookingengine.domain.entities;
 
 public enum PaymentStatus {
-    PENDING,
-    CONFIRMED,
-    CANCELLED,
-    REFUNDED
+    PENDING,      // En attente de paiement
+    CONFIRMED,    // Paiement confirme
+    CANCELLED,    // Paiement annule
+    REFUNDED      // Paiement rembourse
 }

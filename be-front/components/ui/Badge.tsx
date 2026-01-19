@@ -25,10 +25,8 @@ export function StatusBadge({ status }: { status: string }) {
   const statusConfig: Record<string, { variant: BadgeProps['variant']; label: string }> = {
     PENDING: { variant: 'warning', label: 'En attente' },
     CONFIRMED: { variant: 'success', label: 'Confirmé' },
-    CANCELLED: { variant: 'danger', label: 'Annulé' },
-    COMPLETED: { variant: 'info', label: 'Terminé' },
-    FAILED: { variant: 'danger', label: 'Échoué' },
-    REFUNDED: { variant: 'default', label: 'Remboursé' },
+    CANCELLED: { variant: 'default', label: 'Annulé' },
+    REFUNDED: { variant: 'info', label: 'Remboursé' },
   };
 
   const config = statusConfig[status] || { variant: 'default', label: status };

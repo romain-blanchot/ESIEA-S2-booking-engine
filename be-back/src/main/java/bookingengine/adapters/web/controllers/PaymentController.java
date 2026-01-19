@@ -86,8 +86,13 @@ public class PaymentController {
     @ApiResponse(responseCode = "500", description = "Erreur serveur lors de la modification")
     public ResponseEntity<PaymentResponse> updatePayment(@PathVariable Long id, @RequestBody PaymentUpdateRequest request) {
         Payment payment = paymentUseCase.obtenirPaymentParId(id);
-        payment.setPaymentMethod(request.paymentMethod());
-        payment.setStatus(PaymentStatus.valueOf(request.status()));
+        // Mise à jour uniquement des champs fournis
+        if (request.paymentMethod() != null) {
+            payment.setPaymentMethod(request.paymentMethod());
+        }
+        if (request.status() != null) {
+            payment.setStatus(PaymentStatus.valueOf(request.status()));
+        }
 
         Payment updated = paymentUseCase.modifierPayment(id, payment);
         return ResponseEntity.ok(PaymentResponse.from(updated));

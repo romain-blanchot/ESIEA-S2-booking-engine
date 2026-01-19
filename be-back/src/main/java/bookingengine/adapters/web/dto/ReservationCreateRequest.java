@@ -6,5 +6,6 @@ public record ReservationCreateRequest(
         Long chambreId,
         Long utilisateurId,
         LocalDate dateDebut,
-        LocalDate dateFin
+        LocalDate dateFin,
+        String paymentMethod
 ) {}

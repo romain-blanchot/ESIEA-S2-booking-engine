@@ -145,13 +145,6 @@ function Hero() {
           </a>
         </div>
       </div>
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-        <a href="#chambres" className="block animate-bounce">
-          <svg className="w-6 h-6 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-        </a>
-      </div>
     </section>
   );
 }
@@ -266,6 +259,7 @@ function ReservationSection() {
   const [dateDebut, setDateDebut] = useState('');
   const [dateFin, setDateFin] = useState('');
   const [chambreId, setChambreId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('ESPECES');
   const [resultat, setResultat] = useState<ResultatCalculPrix | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,6 +301,7 @@ function ReservationSection() {
           utilisateurId: user.id,
           dateDebut,
           dateFin,
+          paymentMethod,
         });
         setReservationSuccess(true);
         // Reset form after success
@@ -314,7 +309,12 @@ function ReservationSection() {
           router.push('/mon-compte');
         }, 2000);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Erreur lors de la reservation');
+        const errorMessage = err instanceof Error ? err.message : 'Erreur lors de la reservation';
+        if (errorMessage.includes('409') || errorMessage.toLowerCase().includes('disponible')) {
+          setError('Cette chambre n\'est plus disponible pour les dates selectionnees.');
+        } else {
+          setError(errorMessage);
+        }
       } finally {
         setReservationLoading(false);
       }
@@ -324,6 +324,7 @@ function ReservationSection() {
         chambreId: Number(chambreId),
         dateDebut,
         dateFin,
+        paymentMethod,
         prixTotal: resultat?.prixTotal,
         numeroChambre: resultat?.numeroChambre,
         typeChambre: resultat?.typeChambre,
@@ -437,6 +438,58 @@ function ReservationSection() {
                 </div>
               )}
 
+              {/* Payment method selector */}
+              <div className="mt-6">
+                <p className="text-sm font-medium text-gray-700 mb-3">Mode de paiement</p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <label className={`flex items-center gap-2 px-4 py-3 border cursor-pointer transition-colors ${
+                    paymentMethod === 'ESPECES' ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="ESPECES"
+                      checked={paymentMethod === 'ESPECES'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="sr-only"
+                    />
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    <span className="text-sm">Especes</span>
+                  </label>
+                  <label className={`flex items-center gap-2 px-4 py-3 border cursor-pointer transition-colors ${
+                    paymentMethod === 'VIREMENT' ? 'border-gray-900 bg-gray-50' : 'border-gray-200 hover:border-gray-300'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="VIREMENT"
+                      checked={paymentMethod === 'VIREMENT'}
+                      onChange={(e) => setPaymentMethod(e.target.value)}
+                      className="sr-only"
+                    />
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                    </svg>
+                    <span className="text-sm">Virement</span>
+                  </label>
+                  <label className="flex items-center gap-2 px-4 py-3 border border-gray-100 bg-gray-50 cursor-not-allowed opacity-50">
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="CARTE"
+                      disabled
+                      className="sr-only"
+                    />
+                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                    <span className="text-sm text-gray-400">Carte (bientot)</span>
+                  </label>
+                </div>
+              </div>
+
               {reservationSuccess ? (
                 <div className="mt-6 p-4 bg-green-50 text-green-700 text-center">
                   <svg className="w-8 h-8 mx-auto mb-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -502,7 +555,7 @@ function Footer() {
           </div>
         </div>
         <div className="border-t border-gray-800 mt-12 pt-8 text-center text-sm text-gray-500">
-          2024 Hotel & Spa. Tous droits reserves.
+          2026 Hotel & Spa. Tous droits reserves.
         </div>
       </div>
     </footer>
